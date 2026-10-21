@@ -2,7 +2,7 @@ import random
 import numpy as np
 import torch
 import yaml
-
+import mlflow
 from pathlib import Path
 from datetime import datetime
 from uuid import uuid4
@@ -100,6 +100,12 @@ class Experiment:
 
         print("Идентификатор запуска:", run_id)
 
+        # Настраиваем MLflow
+        mlflow.set_tracking_uri("sqlite:///mlflow.db")
+
+        # Название эксперимента
+        mlflow.set_experiment("lr0")
+
         trainer = Trainer(
             model=model,
             data=data,
@@ -107,32 +113,52 @@ class Experiment:
             results=results
         )
 
-        try:
+        with mlflow.start_run(run_name=run_id):
 
-            val_acc = trainer.train()
+            # Записываем параметры эксперимента
+            mlflow.log_param("seed", self.config["seed"])
+            mlflow.log_param("split_seed", self.config["split_seed"])
 
-            results.save_predictions(
-                model,
-                data.val_loader,
-                data.val_idx
-            )
+            for section in ("model", "train", "runtime"):
+                for key, value in self.config[section].items():
+                    mlflow.log_param(f"{section}.{key}", value)
 
-            results.save_metrics(val_acc)
+            try:
 
-            metadata["status"] = "complete"
+                # Обучаем нейросеть
+                val_acc = trainer.train()
 
-        except Exception as error:
+                # Сохраняем предсказания
+                results.save_predictions(
+                    model,
+                    data.val_loader,
+                    data.val_idx,
+                    test_loader=data.test_loader,
+                    test_idx=data.test_idx
+                )
 
-            metadata["status"] = "failed"
-            metadata["error"] = str(error)
+                # Сохраняем итоговые показатели
+                metrics = results.save_metrics(val_acc)
 
-            raise
+                # Передаём показатели в MLflow
+                mlflow.log_metrics(metrics)
 
-        finally:
+                metadata["status"] = "complete"
 
-            metadata["end_time"] = datetime.now().astimezone().isoformat()
+            except Exception as error:
 
-            results.save_metadata(metadata)
+                metadata["status"] = "failed"
+                metadata["error"] = str(error)
+
+                raise
+
+            finally:
+
+                metadata["end_time"] = datetime.now().astimezone().isoformat()
+                results.save_metadata(metadata)
+
+                # Сохраняем файлы запуска в MLflow
+                mlflow.log_artifacts(str(run_dir))
     def create_metadata(self, run_id):
 
         # Получаем SHA256 разделения данных

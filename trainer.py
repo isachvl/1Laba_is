@@ -1,6 +1,6 @@
 import time
 import torch
-
+import mlflow
 from torch import nn
 
 
@@ -96,6 +96,15 @@ class Trainer:
                 val_loss,
                 val_acc,
                 epoch_time
+            )
+            mlflow.log_metrics(
+                {
+                    "train_loss": train_loss,
+                    "val_loss": val_loss,
+                    "val_acc": val_acc,
+                    "epoch_time": epoch_time
+                },
+                step=epoch+1
             )
 
             print(
