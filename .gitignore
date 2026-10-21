@@ -1,0 +1,21 @@
+# Виртуальное окружение
+venv/
+.venv/
+
+# Результаты экспериментов
+runs/
+
+# MLflow
+mlruns/
+mlartifacts/
+mlflow.db
+
+# Optuna
+optuna.db
+
+# Служебные файлы Python
+__pycache__/
+*.pyc
+
+# VS Code
+.vscode/

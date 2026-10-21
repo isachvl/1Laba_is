@@ -1,0 +1,13 @@
+{
+  "source": "sklearn.datasets.load_digits",
+  "version": "1.9.1",
+  "total_records": 1797,
+  "split_seed": 0,
+  "split_rule": "Stratified: test=20%, val=25% of rest",
+  "train_records": 1077,
+  "val_records": 360,
+  "test_records": 360,
+  "excluded_records": 0,
+  "split_file": "data/split.json",
+  "split_sha256": "ccad008c18ef090231a9a4b493eff9403d76e702fb2959661bf23272955c0716"
+}
