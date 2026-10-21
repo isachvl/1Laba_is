@@ -7,7 +7,7 @@ from torch.utils.data import TensorDataset, DataLoader
 
 class DigitsData:
 
-    def __init__(self, batch_size, generator):
+    def __init__(self, batch_size, generator, eval_test=False):
  
         X, y = load_digits(return_X_y=True)
 
@@ -60,3 +60,30 @@ class DigitsData:
             shuffle=False,
             num_workers=0
         )
+                # По умолчанию тестовые данные не используются
+        self.test_loader = None
+        self.test_idx = None
+
+        # Загружаем test только при --eval-test
+        if eval_test:
+
+            self.test_idx = split["test"]
+
+            X_test = torch.tensor(
+                X[self.test_idx] / 16.0,
+                dtype=torch.float32
+            )
+
+            y_test = torch.tensor(
+                y[self.test_idx],
+                dtype=torch.long
+            )
+
+            self.test_dataset = TensorDataset(X_test, y_test)
+
+            self.test_loader = DataLoader(
+                self.test_dataset,
+                batch_size=batch_size,
+                shuffle=False,
+                num_workers=0
+            )

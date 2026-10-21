@@ -18,11 +18,18 @@ from importlib.metadata import version
 
 class Experiment:
 
-    def __init__(self, config_path):
+    def __init__(self, config_path, seed=None, eval_test=False):
 
-        # Загружаем настройки
         with open(config_path, "r", encoding="utf-8") as f:
             self.config = yaml.safe_load(f)
+
+        if seed is not None:
+            self.config["seed"] = seed
+
+        # Сохраняем параметр тестирования в объекте
+        self.eval_test = eval_test
+
+        self.validate_config()
 
     # Фиксируем случайность
     def set_seed(self):
@@ -56,7 +63,8 @@ class Experiment:
         # Загружаем данные
         data = DigitsData(
             batch_size=self.config["train"]["batch_size"],
-            generator=generator
+            generator=generator,
+            eval_test=self.eval_test
         )
 
         print("Обучающих изображений:", len(data.train_dataset))
@@ -174,3 +182,40 @@ class Experiment:
         }
 
         return metadata
+    def validate_config(self):
+
+        model = self.config["model"]
+        train = self.config["train"]
+        runtime = self.config["runtime"]
+
+        # Проверка скорости обучения
+        if train["lr"] <= 0:
+            raise ValueError("lr должен быть больше 0")
+
+        # Проверка количества эпох
+        if train["epochs"] <= 0:
+            raise ValueError("epochs должен быть больше 0")
+
+        # Проверка размера батча
+        if train["batch_size"] <= 0:
+            raise ValueError("batch_size должен быть больше 0")
+
+        # Проверка числа скрытых слоёв
+        if model["n_layers"] < 1:
+            raise ValueError("n_layers должен быть не меньше 1")
+
+        # Проверка количества нейронов
+        if model["hidden"] <= 0:
+            raise ValueError("hidden должен быть больше 0")
+
+        # Проверка Dropout
+        if not 0 <= model["dropout"] < 1:
+            raise ValueError("dropout должен быть от 0 до 1 (не включая 1)")
+
+        # Проверка регуляризации
+        if train["weight_decay"] < 0:
+            raise ValueError("weight_decay не может быть отрицательным")
+
+        # Проверка количества потоков
+        if runtime["num_threads"] < 1:
+            raise ValueError("num_threads должен быть не меньше 1")

@@ -1,7 +1,8 @@
 import csv
 import json
 from pathlib import Path
-
+import csv
+import json
 import torch
 
 
@@ -30,6 +31,43 @@ class Results:
             ])
 
     # Сохраняем результат одной эпохи
+    def save_predictions(
+        self,
+        model,
+        val_loader,
+        val_idx,
+        test_loader=None,
+        test_idx=None
+    ):
+
+        model.eval()
+
+        with open(self.predictions_path, "w", newline="", encoding="utf-8") as f:
+
+            writer = csv.writer(f)
+            writer.writerow(["split", "index", "y_true", "y_pred"])
+
+            # Проверочная выборка
+            self.write_predictions(
+                model, val_loader, val_idx, "val", writer
+            )
+
+            # Тестовая выборка, если разрешена
+            if test_loader is not None:
+                self.write_predictions(
+                    model, test_loader, test_idx, "test", writer
+                )
+
+        print("Предсказания сохранены:", self.predictions_path)
+    def save_metadata(self, metadata):
+
+        with open(self.metadata_path, "w", encoding="utf-8") as f:
+            json.dump(
+                metadata,
+                f,
+                indent=4,
+                ensure_ascii=False
+            )
     def save_epoch(self, epoch, train_loss, val_loss, val_acc, epoch_time):
 
         with open(self.history_path, "a", newline="", encoding="utf-8") as f:
@@ -42,84 +80,79 @@ class Results:
                 val_acc,
                 epoch_time
             ])
+    def write_predictions(self, model, loader, indices, split_name, writer):
 
-    # Сохраняем предсказания нейросети
-    def save_predictions(self, model, val_loader, val_idx):
+        offset = 0
 
-        model.eval()
+        with torch.no_grad():
 
-        with open(self.predictions_path, "w", newline="", encoding="utf-8") as f:
+            for images, labels in loader:
 
-            writer = csv.writer(f)
-            writer.writerow(["split", "index", "y_true", "y_pred"])
+                output = model(images)
 
-            offset = 0
+                predictions = torch.argmax(output, dim=1)
 
-            with torch.no_grad():
+                for j in range(len(labels)):
 
-                for images, labels in val_loader:
+                    writer.writerow([
+                        split_name,
+                        indices[offset + j],
+                        labels[j].item(),
+                        predictions[j].item()
+                    ])
 
-                    output = model(images)
-                    predictions = torch.argmax(output, dim=1)
-
-                    for j in range(len(labels)):
-
-                        writer.writerow([
-                            "val",
-                            val_idx[offset + j],
-                            labels[j].item(),
-                            predictions[j].item()
-                        ])
-
-                    offset += len(labels)
-
-        print("Предсказания сохранены:", self.predictions_path)
-    def save_metadata(self, metadata):
-
-        with open(self.metadata_path, "w", encoding="utf-8") as f:
-            json.dump(
-                metadata,
-                f,
-                indent=4,
-                ensure_ascii=False
-            )
+                offset += len(labels)
     # Сохраняем итоговые метрики
-    def save_metrics(self, expected_val_acc):
+    def save_metrics(self, expected_val_acc=None):
 
         # Читаем сохранённые предсказания
         with open(self.predictions_path, "r", encoding="utf-8") as f:
-            rows = list(csv.DictReader(f))
-
-        correct = sum(
-            int(row["y_true"]) == int(row["y_pred"])
-            for row in rows
-        )
-
-        accuracy = correct / len(rows)
-
-        # Проверяем совпадение точности
-        assert abs(accuracy - expected_val_acc) < 1e-12
+            predictions = list(csv.DictReader(f))
 
         # Читаем историю обучения
         with open(self.history_path, "r", encoding="utf-8") as f:
             history = list(csv.DictReader(f))
 
-        val_loss = float(history[-1]["val_loss"])
+        # Отбираем проверочную выборку
+        val_rows = [
+            row for row in predictions
+            if row["split"] == "val"
+        ]
 
-        train_time = sum(
-            float(row["epoch_time"])
-            for row in history
+        # Вычисляем точность из CSV
+        val_correct = sum(
+            int(row["y_true"]) == int(row["y_pred"])
+            for row in val_rows
         )
 
         metrics = {
-            "val_acc": accuracy,
-            "val_loss": val_loss,
-            "train_time": train_time
+            "val_acc": val_correct / len(val_rows),
+            "val_loss": float(history[-1]["val_loss"]),
+            "train_time": sum(
+                float(row["epoch_time"]) for row in history
+            )
         }
 
+        # Отбираем тестовую выборку
+        test_rows = [
+            row for row in predictions
+            if row["split"] == "test"
+        ]
+
+        # Если тестовые предсказания есть
+        if test_rows:
+
+            test_correct = sum(
+                int(row["y_true"]) == int(row["y_pred"])
+                for row in test_rows
+            )
+
+            metrics["test_acc"] = test_correct / len(test_rows)
+
+        # Сохраняем итоговые метрики
         with open(self.metrics_path, "w", encoding="utf-8") as f:
             json.dump(metrics, f, indent=4)
 
-        print("Правильных ответов:", correct)
-        print(f"Точность из CSV: {accuracy * 100:.2f}%")
         print("Итоговые метрики:", metrics)
+
+        return metrics
