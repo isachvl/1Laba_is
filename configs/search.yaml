@@ -1,0 +1,17 @@
+study_name: lr0_search
+storage: sqlite:///optuna.db
+target_trials: 40
+sampler: TPESampler
+sampler_seed: 42
+pruner: MedianPruner
+n_startup_trials: 5
+n_warmup_steps: 5
+train_seed: 0
+epochs: 30
+space:
+  lr: [0.0001, 0.1]
+  n_layers: [1, 3]
+  hidden: [32, 512]
+  dropout: [0.0, 0.5]
+  weight_decay: [0.000001, 0.01]
+  batch_size: [32, 64, 128]

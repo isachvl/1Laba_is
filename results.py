@@ -1,158 +1,103 @@
+"""Results сохраняет файлы запуска и считает точность только из CSV."""
+
 import csv
 import json
 from pathlib import Path
-import csv
-import json
+
 import torch
 
 
 class Results:
-
     def __init__(self, run_dir):
-
         self.run_dir = Path(run_dir)
-        self.run_dir.mkdir(parents=True, exist_ok=True)
+        self.run_dir.mkdir(parents=True, exist_ok=False)
 
         self.history_path = self.run_dir / "history.csv"
         self.predictions_path = self.run_dir / "predictions.csv"
         self.metrics_path = self.run_dir / "metrics.json"
         self.metadata_path = self.run_dir / "metadata.json"
 
-        # Создаём history.csv с заголовками
-        with open(self.history_path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-
-            writer.writerow([
-                "epoch",
-                "train_loss",
-                "val_loss",
-                "val_acc",
-                "epoch_time"
+        # Заголовки CSV создаём один раз, строки эпох дописываем позже.
+        with self.history_path.open("w", newline="", encoding="utf-8") as file:
+            csv.writer(file).writerow([
+                "epoch", "train_loss", "val_loss", "val_acc", "epoch_time"
             ])
 
-    # Сохраняем результат одной эпохи
+    def save_epoch(self, epoch, train_loss, val_loss, val_acc, epoch_time):
+        """Дописываем метрики одной эпохи в history.csv."""
+        with self.history_path.open("a", newline="", encoding="utf-8") as file:
+            csv.writer(file).writerow([
+                epoch, train_loss, val_loss, val_acc, epoch_time
+            ])
+
     def save_predictions(
-        self,
-        model,
-        val_loader,
-        val_idx,
-        test_loader=None,
-        test_idx=None
+        self, model, val_loader, val_idx, test_loader=None, test_idx=None
     ):
-
+        """Всегда сохраняем val, а test — только для финальной оценки."""
         model.eval()
-
-        with open(self.predictions_path, "w", newline="", encoding="utf-8") as f:
-
-            writer = csv.writer(f)
+        with self.predictions_path.open("w", newline="", encoding="utf-8") as file:
+            writer = csv.writer(file)
             writer.writerow(["split", "index", "y_true", "y_pred"])
 
-            # Проверочная выборка
-            self.write_predictions(
-                model, val_loader, val_idx, "val", writer
-            )
-
-            # Тестовая выборка, если разрешена
+            self.write_predictions(model, val_loader, val_idx, "val", writer)
             if test_loader is not None:
-                self.write_predictions(
-                    model, test_loader, test_idx, "test", writer
-                )
+                self.write_predictions(model, test_loader, test_idx, "test", writer)
 
-        print("Предсказания сохранены:", self.predictions_path)
-    def save_metadata(self, metadata):
-
-        with open(self.metadata_path, "w", encoding="utf-8") as f:
-            json.dump(
-                metadata,
-                f,
-                indent=4,
-                ensure_ascii=False
-            )
-    def save_epoch(self, epoch, train_loss, val_loss, val_acc, epoch_time):
-
-        with open(self.history_path, "a", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-
-            writer.writerow([
-                epoch,
-                train_loss,
-                val_loss,
-                val_acc,
-                epoch_time
-            ])
     def write_predictions(self, model, loader, indices, split_name, writer):
-
+        """Записываем предсказания, сохраняя исходный индекс изображения."""
         offset = 0
 
         with torch.no_grad():
-
             for images, labels in loader:
-
-                output = model(images)
-
-                predictions = torch.argmax(output, dim=1)
+                predictions = torch.argmax(model(images), dim=1)
 
                 for j in range(len(labels)):
-
                     writer.writerow([
                         split_name,
-                        indices[offset + j],
-                        labels[j].item(),
-                        predictions[j].item()
+                        int(indices[offset + j]),
+                        int(labels[j]),
+                        int(predictions[j]),
                     ])
 
                 offset += len(labels)
-    # Сохраняем итоговые метрики
+
     def save_metrics(self, expected_val_acc=None):
+        """Пересчитываем итоговую точность по файлам, а не по переменной."""
+        with self.predictions_path.open(encoding="utf-8", newline="") as file:
+            predictions = list(csv.DictReader(file))
 
-        # Читаем сохранённые предсказания
-        with open(self.predictions_path, "r", encoding="utf-8") as f:
-            predictions = list(csv.DictReader(f))
+        with self.history_path.open(encoding="utf-8", newline="") as file:
+            history = list(csv.DictReader(file))
+        if not history:
+            raise ValueError("Не записано ни одной эпохи")
 
-        # Читаем историю обучения
-        with open(self.history_path, "r", encoding="utf-8") as f:
-            history = list(csv.DictReader(f))
+        metrics = {}
+        for split_name in ("val", "test"):
+            rows = [row for row in predictions if row["split"] == split_name]
+            if not rows:
+                continue
 
-        # Отбираем проверочную выборку
-        val_rows = [
-            row for row in predictions
-            if row["split"] == "val"
-        ]
+            correct = sum(
+                int(row["y_true"]) == int(row["y_pred"])
+                for row in rows
+            )
+            metrics[f"{split_name}_acc"] = correct / len(rows)
 
-        # Вычисляем точность из CSV
-        val_correct = sum(
-            int(row["y_true"]) == int(row["y_pred"])
-            for row in val_rows
+        metrics["val_loss"] = float(history[-1]["val_loss"])
+        metrics["train_time"] = sum(
+            float(row["epoch_time"]) for row in history
         )
 
-        metrics = {
-            "val_acc": val_correct / len(val_rows),
-            "val_loss": float(history[-1]["val_loss"]),
-            "train_time": sum(
-                float(row["epoch_time"]) for row in history
-            )
-        }
+        if expected_val_acc is not None:
+            if abs(metrics["val_acc"] - expected_val_acc) > 1e-10:
+                raise AssertionError("val_acc не совпадает с predictions.csv")
 
-        # Отбираем тестовую выборку
-        test_rows = [
-            row for row in predictions
-            if row["split"] == "test"
-        ]
-
-        # Если тестовые предсказания есть
-        if test_rows:
-
-            test_correct = sum(
-                int(row["y_true"]) == int(row["y_pred"])
-                for row in test_rows
-            )
-
-            metrics["test_acc"] = test_correct / len(test_rows)
-
-        # Сохраняем итоговые метрики
-        with open(self.metrics_path, "w", encoding="utf-8") as f:
-            json.dump(metrics, f, indent=4)
-
-        print("Итоговые метрики:", metrics)
-
+        self.metrics_path.write_text(
+            json.dumps(metrics, indent=4, ensure_ascii=False), encoding="utf-8"
+        )
         return metrics
+
+    def save_metadata(self, metadata):
+        self.metadata_path.write_text(
+            json.dumps(metadata, indent=4, ensure_ascii=False), encoding="utf-8"
+        )

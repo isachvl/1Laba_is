@@ -2,16 +2,17 @@
 venv/
 .venv/
 
-# Результаты экспериментов
+# Все результаты сохраняются локально (для сдачи их прикладывают отдельно)
 runs/
 
-# MLflow
+# MLflow, Optuna и вспомогательные файлы SQLite
 mlruns/
 mlartifacts/
 mlflow.db
-
-# Optuna
 optuna.db
+*.db-shm
+*.db-wal
+*.db-journal
 
 # Служебные файлы Python
 __pycache__/
@@ -19,3 +20,6 @@ __pycache__/
 
 # VS Code
 .vscode/
+
+# Временные документы Word
+~$*.docx
