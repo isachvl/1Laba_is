@@ -94,7 +94,7 @@ mlflow server --backend-store-uri sqlite:///mlflow.db
 
 Завершив все шаги, сохрани исходники, `configs/best.yaml` и `report/` в Git:
 
-```powershell
+``` терминал
 git add .
 git commit -m "Finish LR0 with final results and report"
 git push

@@ -28,7 +28,7 @@ def create_study():
         storage=STUDY_STORAGE,
         load_if_exists=True,
         direction="maximize",  # Чем выше точность, тем лучше.
-        sampler=optuna.samplers.TPESampler(seed=42),
+        sampler=optuna.samplers.TPESampler(seed=42),# алгос который выбирает какой сеед выбрать
         pruner=optuna.pruners.MedianPruner(
             n_startup_trials=5,
             n_warmup_steps=5,
@@ -109,7 +109,7 @@ def main():
     )
     args = parser.parse_args()
     if args.target not in (10, 40):
-        parser.error("Для лабораторной используй --target 10, затем --target 40")
+        parser.error(" --target 10, затем --target 40")
 
     # Задание требует записать прогноз и зафиксировать код ДО поиска.
     hypothesis = Path("hypothesis.md")

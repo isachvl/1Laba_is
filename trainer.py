@@ -1,7 +1,5 @@
 """Trainer отвечает только за обучение и проверку нейросети.
 
-Код почти такой же, как в исходном проекте. Новое здесь — on_epoch:
-передаём Optuna текущую точность, чтобы прунер мог прервать плохой trial.
 """
 
 import math
@@ -35,8 +33,8 @@ class Trainer:
             self.optimizer.zero_grad()
 
             output = self.model(images)
-            loss = self.criterion(output, labels)
-            loss.backward()
+            loss = self.criterion(output, labels)#Вычисляем ошибку CrossEntropyLoss, сравнивая выходы сети с правильными ответами
+            loss.backward()#Вычисляем градиенты: как изменение каждого веса влияет на ошибку.
             self.optimizer.step()
 
             # Учитываем размер батча для правильного среднего loss.
@@ -44,13 +42,13 @@ class Trainer:
 
         return train_loss / len(self.data.train_dataset)
 
-    def validate(self):
+    def validate(self): #проверяем её на 360 изображениях
         """Проверяем качество на val, не меняя веса модели."""
         self.model.eval()
         val_loss = 0.0
         correct = 0
 
-        with torch.no_grad():
+        with torch.no_grad(): # откл градиет
             for images, labels in self.data.val_loader:
                 output = self.model(images)
                 loss = self.criterion(output, labels)
@@ -76,7 +74,7 @@ class Trainer:
 
             # Если обучение испортилось численно, trial отмечается как FAIL.
             if not all(math.isfinite(x) for x in (train_loss, val_loss, val_acc)):
-                return float("nan")
+                return float("nan")  #десь проверяем, что все метрики являются конечными числами
 
             self.results.save_epoch(
                 epoch, train_loss, val_loss, val_acc, epoch_time

@@ -3,8 +3,7 @@ import torch
 
 from sklearn.datasets import load_digits
 from torch.utils.data import TensorDataset, DataLoader
-
-
+"""загружаем данные и преоразуем датаЛодырей"""
 class DigitsData:
 
     def __init__(self, batch_size, generator, eval_test=False):
@@ -42,13 +41,13 @@ class DigitsData:
 
         # Создаём датасеты
         self.train_dataset = TensorDataset(X_train, y_train)
-        self.val_dataset = TensorDataset(X_val, y_val)
+        self.val_dataset = TensorDataset(X_val, y_val) # объедниение правильного изображение и ответа
 
         # Загрузчик обучающих данных
         self.train_loader = DataLoader(
             self.train_dataset,
             batch_size=batch_size,
-            shuffle=True,
+            shuffle=True,#перемешивать изображения перед каждой эпохой.
             num_workers=0,
             generator=generator
         )

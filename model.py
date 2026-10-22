@@ -13,7 +13,7 @@ class DigitMLP(nn.Module):
         for i in range(n_layers):
             layers.append(nn.Linear(input_size, hidden))
             layers.append(nn.ReLU())
-            layers.append(nn.Dropout(dropout))
+            layers.append(nn.Dropout(dropout))#отключает часть нейронов
 
             input_size = hidden
 
